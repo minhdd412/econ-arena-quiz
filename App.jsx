@@ -4,8 +4,6 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc,
-  updateDoc,
   onSnapshot,
   collection,
   getDocs,
@@ -29,7 +27,6 @@ import {
   X,
   RotateCcw,
   Download,
-  Settings,
   ShieldCheck,
   Radio,
   ArrowRight,
@@ -39,25 +36,8 @@ import {
   WifiOff,
 } from 'lucide-react';
 
-// ============================================================================
-// OPTIONAL: PASTE YOUR FIREBASE CONFIG HERE FOR PERMANENT DEPLOYMENT
-// ============================================================================
 const DEFAULT_FIREBASE_CONFIG = null;
-/* Example:
-const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSy...",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
-};
-*/
 
-// ============================================================================
-// COMPLETE 20-QUESTION BANK (CHAPTER 5: SOCIALIST-ORIENTED MARKET ECONOMY)
-// 8 Easy (40%), 8 Medium (40%), 4 Hard (20%)
-// ============================================================================
 const QUIZ_QUESTIONS = [
   {
     id: 1,
@@ -376,58 +356,28 @@ const QUIZ_QUESTIONS = [
 ];
 
 const OPTION_STYLES = [
-  {
-    bg: 'bg-rose-600 hover:bg-rose-500 border-rose-400',
-    badge: 'A',
-    shape: '▲',
-  },
-  {
-    bg: 'bg-blue-600 hover:bg-blue-500 border-blue-400',
-    badge: 'B',
-    shape: '◆',
-  },
-  {
-    bg: 'bg-amber-500 hover:bg-amber-400 border-amber-300 text-slate-950',
-    badge: 'C',
-    shape: '●',
-  },
-  {
-    bg: 'bg-emerald-600 hover:bg-emerald-500 border-emerald-400',
-    badge: 'D',
-    shape: '■',
-  },
+  { bg: 'bg-rose-600 hover:bg-rose-500 border-rose-400', shape: '▲' },
+  { bg: 'bg-blue-600 hover:bg-blue-500 border-blue-400', shape: '◆' },
+  { bg: 'bg-amber-500 hover:bg-amber-400 border-amber-300 text-slate-950', shape: '●' },
+  { bg: 'bg-emerald-600 hover:bg-emerald-500 border-emerald-400', shape: '■' },
 ];
 
 const AVATARS = ['🚀', '🦁', '🦊', '🐼', '⚡', '🔥', '🎯', '🏆', '🦉', '🐉', '🌟', '💎'];
 
-// Helper to extract Firebase config from raw JS snippet or JSON string
 function parseFirebaseConfigInput(rawText) {
   if (!rawText || !rawText.trim()) return null;
   try {
     const parsed = JSON.parse(rawText);
     if (parsed && parsed.apiKey && parsed.projectId) return parsed;
-  } catch (_) {
-    // Fallback regex extraction for JS object literal copied from Firebase Console
-  }
-  const keys = [
-    'apiKey',
-    'authDomain',
-    'projectId',
-    'storageBucket',
-    'messagingSenderId',
-    'appId',
-  ];
+  } catch (_) {}
+  const keys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
   const extracted = {};
   for (const key of keys) {
     const regex = new RegExp(`${key}\\s*:\\s*["']([^"']+)["']`);
     const match = rawText.match(regex);
-    if (match && match[1]) {
-      extracted[key] = match[1].trim();
-    }
+    if (match && match[1]) extracted[key] = match[1].trim();
   }
-  if (extracted.apiKey && extracted.projectId) {
-    return extracted;
-  }
+  if (extracted.apiKey && extracted.projectId) return extracted;
   return null;
 }
 
@@ -454,7 +404,6 @@ function decodeConfigFromHash(hashStr) {
 }
 
 export default function App() {
-  // Parse room & firebase config from URL on load
   const initialUrlParams = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const roomParam = (params.get('room') || 'ECON2026').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -472,16 +421,14 @@ export default function App() {
 
   const [firebaseConfig, setFirebaseConfig] = useState(initialUrlParams.firebaseConfig);
   const [roomCode, setRoomCode] = useState(initialUrlParams.roomCode);
-  const [view, setView] = useState('join'); // 'join' | 'waiting' | 'playing' | 'finished' | 'host'
+  const [view, setView] = useState('join');
 
-  // Firebase state
   const [db, setDb] = useState(null);
   const [firebaseError, setFirebaseError] = useState('');
   const [showFirebaseModal, setShowFirebaseModal] = useState(false);
   const [firebaseInputText, setFirebaseInputText] = useState('');
 
-  // Room & Players realtime state
-  const [roomStatus, setRoomStatus] = useState('waiting'); // 'waiting' | 'active' | 'ended'
+  const [roomStatus, setRoomStatus] = useState('waiting');
   const [players, setPlayers] = useState([]);
   const [customBaseUrl, setCustomBaseUrl] = useState(() => {
     const url = new URL(window.location.href);
@@ -490,8 +437,7 @@ export default function App() {
     return url.toString();
   });
 
-  // Student local session state
-  const [playerId, setPlayerId] = useState(() => {
+  const [playerId] = useState(() => {
     let id = sessionStorage.getItem('econarena_pid');
     if (!id) {
       id = 'p_' + Math.random().toString(36).substring(2, 10);
@@ -510,19 +456,16 @@ export default function App() {
   const [isAnswerLocked, setIsAnswerLocked] = useState(false);
   const [lastPointsEarned, setLastPointsEarned] = useState(0);
 
-  // Power-ups (1 use each per game)
   const [used5050, setUsed5050] = useState(false);
   const [usedFreeze, setUsedFreeze] = useState(false);
   const [hiddenOptions, setHiddenOptions] = useState([]);
   const [freezeRemaining, setFreezeRemaining] = useState(0);
 
-  // Host UI helpers
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQrFullscreen, setShowQrFullscreen] = useState(false);
 
   const timerRef = useRef(null);
 
-  // Initialize Firebase when config exists
   useEffect(() => {
     if (!firebaseConfig) {
       setDb(null);
@@ -544,7 +487,6 @@ export default function App() {
     }
   }, [firebaseConfig]);
 
-  // Construct live Join URL (embeds room code + Firebase config in hash so QR works on any phone!)
   const joinUrl = useMemo(() => {
     try {
       const url = new URL(customBaseUrl || window.location.origin);
@@ -564,7 +506,6 @@ export default function App() {
     )}`;
   }, [joinUrl]);
 
-  // Subscribe to Room status & Players list (Firestore OR Local BroadcastChannel fallback)
   useEffect(() => {
     if (!roomCode) return;
 
@@ -585,7 +526,7 @@ export default function App() {
           }
         },
         (err) => {
-          setFirebaseError(`Firestore permission/connection error: ${err.message}`);
+          setFirebaseError(`Firestore error: ${err.message}`);
         }
       );
 
@@ -602,7 +543,6 @@ export default function App() {
         unsubPlayers();
       };
     } else {
-      // Local fallback mode (works across browser tabs on same device)
       const storageKey = `econarena_local_${roomCode}`;
       const syncFromLocal = () => {
         try {
@@ -632,14 +572,12 @@ export default function App() {
     }
   }, [db, roomCode]);
 
-  // Automatically transition waiting students into Question 1 when Host clicks START!
   useEffect(() => {
     if (view === 'waiting' && roomStatus === 'active') {
       startLocalQuizRun();
     }
   }, [view, roomStatus]);
 
-  // Sync player record to Firestore or LocalStorage
   const syncPlayerProgress = async (overrideData = {}) => {
     const payload = {
       id: playerId,
@@ -674,7 +612,6 @@ export default function App() {
     }
   };
 
-  // Student joins the room
   const handleJoinRoom = async (e) => {
     e.preventDefault();
     if (!nickname.trim()) return;
@@ -727,7 +664,6 @@ export default function App() {
     setView('playing');
   };
 
-  // Host Controls
   const handleHostStartQuiz = async () => {
     if (db) {
       await setDoc(
@@ -764,7 +700,6 @@ export default function App() {
     }
   };
 
-  // Countdown Timer Effect during Gameplay
   useEffect(() => {
     if (view !== 'playing' || isAnswerLocked) return;
 
@@ -776,7 +711,7 @@ export default function App() {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          handleSelectAnswer(null); // Time expired
+          handleSelectAnswer(null);
           return 0;
         }
         return prev - 1;
@@ -788,7 +723,6 @@ export default function App() {
 
   const currentQ = QUIZ_QUESTIONS[currentQIndex];
 
-  // Handle Answer Submission
   const handleSelectAnswer = async (option) => {
     if (isAnswerLocked) return;
     setIsAnswerLocked(true);
@@ -827,7 +761,6 @@ export default function App() {
     });
   };
 
-  // Advance to Next Question or Finish
   const handleNextQuestion = async () => {
     if (currentQIndex + 1 < QUIZ_QUESTIONS.length) {
       const nextIdx = currentQIndex + 1;
@@ -847,7 +780,6 @@ export default function App() {
     }
   };
 
-  // Power-Up 1: 50/50
   const activate5050 = () => {
     if (used5050 || isAnswerLocked) return;
     const wrongOptions = currentQ.options.filter((opt) => opt !== currentQ.correctAnswer);
@@ -856,14 +788,12 @@ export default function App() {
     setUsed5050(true);
   };
 
-  // Power-Up 2: Time Freeze (5 seconds)
   const activateFreeze = () => {
     if (usedFreeze || isAnswerLocked) return;
     setFreezeRemaining(5);
     setUsedFreeze(true);
   };
 
-  // Save Firebase config from modal
   const handleSaveFirebaseConfig = () => {
     const parsed = parseFirebaseConfigInput(firebaseInputText);
     if (!parsed) {
@@ -877,7 +807,6 @@ export default function App() {
     setFirebaseInputText('');
   };
 
-  // Export Leaderboard CSV
   const handleExportResultsCsv = () => {
     const headers = ['Rank', 'Nickname', 'Score', 'Correct Answers', 'Total Questions', 'Accuracy (%)'];
     const rows = players.map((p, idx) => {
@@ -903,7 +832,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 text-white flex flex-col">
-      {/* TOP NAVIGATION BAR */}
       <header className="border-b border-white/10 bg-slate-950/70 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -924,7 +852,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Connection Status Badge */}
             <button
               onClick={() => setShowFirebaseModal(true)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
@@ -932,7 +859,6 @@ export default function App() {
                   ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/25'
                   : 'bg-amber-500/15 border-amber-400/40 text-amber-300 hover:bg-amber-500/25'
               }`}
-              title="Configure Firebase Realtime Sync"
             >
               {db ? (
                 <>
@@ -947,7 +873,6 @@ export default function App() {
               )}
             </button>
 
-            {/* Student View Switch */}
             <button
               onClick={() => setView('join')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition ${
@@ -959,7 +884,6 @@ export default function App() {
               Student Arena
             </button>
 
-            {/* Host / Teacher Control Switch */}
             <button
               onClick={() => setView('host')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition ${
@@ -975,13 +899,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* WARNING BANNER IF LOCAL MODE */}
       {!db && (
         <div className="bg-amber-500/15 border-b border-amber-400/30 px-4 py-2 text-xs text-amber-200 flex flex-wrap items-center justify-center gap-2 text-center">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
           <span>
-            Running in <strong>Same-Browser Demo Mode</strong>. To let students scan the QR code from
-            their phones, deploy this site online and connect your free Firebase config.
+            Running in <strong>Same-Browser Demo Mode</strong>. Connect your free Firebase config so
+            all student phones sync in real time.
           </span>
           <button
             onClick={() => setShowFirebaseModal(true)}
@@ -998,14 +921,9 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-        {/* ===================================================================== */}
-        {/* VIEW 1: HOST / TEACHER CONTROL CENTER                                 */}
-        {/* ===================================================================== */}
         {view === 'host' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* LEFT COLUMN: QR CODE & ROOM CONTROLS */}
             <div className="lg:col-span-5 space-y-6">
               <div className="bg-slate-900/90 border border-white/15 rounded-2xl p-6 shadow-2xl">
                 <div className="flex items-center justify-between mb-4">
@@ -1027,7 +945,6 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Room Code Input */}
                 <div className="mb-4">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                     Classroom Room PIN
@@ -1043,7 +960,6 @@ export default function App() {
                   />
                 </div>
 
-                {/* QR Code Display */}
                 <div className="bg-white rounded-2xl p-5 flex flex-col items-center text-slate-950 shadow-inner mb-4">
                   <img
                     src={qrImageUrl}
@@ -1065,7 +981,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Editable Public URL */}
                 <div className="mb-5">
                   <label className="block text-xs font-bold text-slate-400 mb-1">
                     Public Hosted Domain URL (Auto-updates QR)
@@ -1076,7 +991,7 @@ export default function App() {
                       value={customBaseUrl}
                       onChange={(e) => setCustomBaseUrl(e.target.value)}
                       className="flex-1 bg-slate-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-400"
-                      placeholder="https://your-quiz-domain.vercel.app"
+                      placeholder="https://econ-arena-quiz.vercel.app"
                     />
                     <button
                       onClick={() => {
@@ -1101,7 +1016,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* MASTER START / RESET BUTTONS */}
                 <div className="space-y-3">
                   {roomStatus !== 'active' ? (
                     <button
@@ -1143,7 +1057,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN: REAL-TIME LEADERBOARD & LOBBY */}
             <div className="lg:col-span-7">
               <div className="bg-slate-900/90 border border-white/15 rounded-2xl p-6 shadow-2xl h-full flex flex-col">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-5 pb-4 border-b border-white/10">
@@ -1256,9 +1169,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ===================================================================== */}
-        {/* VIEW 2: STUDENT JOIN SCREEN                                           */}
-        {/* ===================================================================== */}
         {view === 'join' && (
           <div className="max-w-md mx-auto mt-6">
             <div className="bg-slate-900/90 border border-white/15 rounded-3xl p-8 shadow-2xl">
@@ -1337,9 +1247,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ===================================================================== */}
-        {/* VIEW 3: STUDENT WAITING ROOM                                          */}
-        {/* ===================================================================== */}
         {view === 'waiting' && (
           <div className="max-w-xl mx-auto mt-8 text-center">
             <div className="bg-slate-900/90 border border-white/15 rounded-3xl p-8 shadow-2xl">
@@ -1374,14 +1281,9 @@ export default function App() {
           </div>
         )}
 
-        {/* ===================================================================== */}
-        {/* VIEW 4: ACTIVE GAMEPLAY (20 QUESTIONS + POWER-UPS + LIVE RANKING)     */}
-        {/* ===================================================================== */}
         {view === 'playing' && currentQ && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* MAIN QUESTION ARENA */}
             <div className="lg:col-span-8 space-y-5">
-              {/* Top HUD: Progress, Timer, Score */}
               <div className="bg-slate-900/90 border border-white/15 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <span className="px-3 py-1.5 rounded-xl bg-indigo-600 font-black text-sm">
@@ -1400,7 +1302,6 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Countdown Timer */}
                 <div
                   className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-black text-xl border ${
                     freezeRemaining > 0
@@ -1423,7 +1324,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Score & Streak */}
                 <div className="flex items-center gap-4">
                   {streak >= 2 && (
                     <div className="flex items-center gap-1 text-amber-400 font-black text-sm">
@@ -1438,7 +1338,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Power-Ups Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/70 border border-white/10 rounded-2xl px-4 py-3">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Zap className="w-4 h-4 text-amber-400" />
@@ -1473,13 +1372,11 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Question Card */}
               <div className="bg-slate-900/95 border border-white/15 rounded-3xl p-6 md:p-8 shadow-2xl">
                 <h3 className="text-xl md:text-2xl font-extrabold leading-snug text-white mb-6">
                   {currentQ.question}
                 </h3>
 
-                {/* 4 Answer Blocks */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {currentQ.options.map((opt, idx) => {
                     const style = OPTION_STYLES[idx];
@@ -1532,7 +1429,6 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Post-Answer Feedback & Explanation */}
                 {isAnswerLocked && (
                   <div className="mt-6 pt-5 border-t border-white/15 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
@@ -1573,7 +1469,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* LIVE MINI LEADERBOARD SIDEBAR */}
             <div className="lg:col-span-4">
               <div className="bg-slate-900/90 border border-white/15 rounded-3xl p-5 shadow-2xl sticky top-20">
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
@@ -1622,9 +1517,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ===================================================================== */}
-        {/* VIEW 5: FINAL PODIUM & FULL CLASSROOM LEADERBOARD                     */}
-        {/* ===================================================================== */}
         {view === 'finished' && (
           <div className="max-w-4xl mx-auto space-y-6">
             <div className="bg-slate-900/95 border border-white/15 rounded-3xl p-8 text-center shadow-2xl">
@@ -1636,10 +1528,8 @@ export default function App() {
                 <strong className="text-emerald-300">#{myRank}</strong>
               </p>
 
-              {/* Top 3 Podium */}
               {players.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 items-end">
-                  {/* 2nd Place */}
                   {players[1] && (
                     <div className="bg-slate-800/80 border border-slate-300/30 rounded-2xl p-5 order-2 md:order-1">
                       <span className="text-3xl">{players[1].avatar}</span>
@@ -1653,7 +1543,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* 1st Place */}
                   {players[0] && (
                     <div className="bg-gradient-to-b from-amber-500/30 to-slate-900 border-2 border-amber-400 rounded-2xl p-6 order-1 md:order-2 shadow-xl shadow-amber-500/10">
                       <Crown className="w-8 h-8 text-amber-400 mx-auto mb-1" />
@@ -1668,7 +1557,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* 3rd Place */}
                   {players[2] && (
                     <div className="bg-slate-800/80 border border-amber-600/40 rounded-2xl p-5 order-3">
                       <span className="text-3xl">{players[2].avatar}</span>
@@ -1685,7 +1573,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Full Rankings Table */}
             <div className="bg-slate-900/90 border border-white/15 rounded-3xl p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-black text-lg">Full Live Leaderboard</h3>
@@ -1731,9 +1618,6 @@ export default function App() {
         )}
       </main>
 
-      {/* ===================================================================== */}
-      {/* FULLSCREEN QR PROJECTOR MODAL FOR CLASSROOM SCREEN                    */}
-      {/* ===================================================================== */}
       {showQrFullscreen && (
         <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-lg flex flex-col items-center justify-center p-6">
           <button
@@ -1757,9 +1641,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* FIREBASE CONFIGURATION MODAL                                          */}
-      {/* ===================================================================== */}
       {showFirebaseModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-white/15 rounded-3xl max-w-lg w-full p-6 shadow-2xl">
